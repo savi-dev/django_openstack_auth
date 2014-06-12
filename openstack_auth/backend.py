@@ -27,8 +27,6 @@ from .utils import check_token_expiration
 from .utils import get_keystone_client
 from .utils import get_keystone_version
 
-import copy
-
 LOG = logging.getLogger(__name__)
 
 
