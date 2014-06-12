@@ -38,7 +38,6 @@ from .user import set_session_from_user, create_user_from_token, Token
 from .utils import get_keystone_client
 from .utils import get_keystone_version
 
-
 LOG = logging.getLogger(__name__)
 
 
@@ -59,8 +58,14 @@ def login(request):
     # Get our initial region for the form.
     initial = {}
     current_region = request.session.get('region_endpoint', None)
-    requested_region = request.GET.get('region', None)
+    default_region = getattr(settings, "DEFAULT_REGION")
+    region_pair = filter(lambda pair: "region" in pair, request.read().split('&'))
+    requested_region = region_pair[0].split("=")[1] if len(region_pair) > 0 else default_region
+    #requested_region = request.GET.get('region', None)
     regions = dict(getattr(settings, "AVAILABLE_REGIONS", []))
+    
+    LOG.debug("requested_region is %s", requested_region)
+    
     if requested_region in regions and requested_region != current_region:
         initial.update({'region': requested_region})
 
@@ -92,10 +97,10 @@ def login(request):
     if request.user.is_authenticated():
         set_session_from_user(request, request.user)
         regions = dict(Login.get_region_choices())
-        region = request.user.endpoint
-        region_name = regions.get(region)
-        request.session['region_endpoint'] = region
-        request.session['region_name'] = region_name
+        region = requested_region# request.user.endpoint
+        #region_name = regions.get(region)
+        #FIX: What is the difference between region_name and region
+        request.session['region_name'] = requested_region #region_name
     return res
 
 

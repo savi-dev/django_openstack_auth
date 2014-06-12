@@ -22,9 +22,7 @@ from django.views.decorators.debug import sensitive_variables
 
 from .exceptions import KeystoneAuthException
 
-
 LOG = logging.getLogger(__name__)
-
 
 class Login(AuthenticationForm):
     """ Form used for logging in a user.
@@ -80,7 +78,8 @@ class Login(AuthenticationForm):
         password = self.cleaned_data.get('password')
         region = self.cleaned_data.get('region')
         domain = self.cleaned_data.get('domain', default_domain)
-
+        #LOG.debug("region is %s", region)
+        self.request.session["region_name"] = region
         if not (username and password):
             # Don't authenticate, just let the other validators handle it.
             return self.cleaned_data
@@ -90,7 +89,7 @@ class Login(AuthenticationForm):
                                            username=username,
                                            password=password,
                                            user_domain_name=domain,
-                                           auth_url=region)
+                                           auth_url=settings.OPENSTACK_KEYSTONE_URL)
             msg = 'Login successful for user "%(username)s".' % \
                 {'username': username}
             LOG.info(msg)
