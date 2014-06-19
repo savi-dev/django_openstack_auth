@@ -22,6 +22,8 @@ from django.utils import timezone
 from keystoneclient.v2_0 import client as client_v2
 from keystoneclient.v3 import client as client_v3
 
+import logging
+LOG = logging.getLogger(__name__)
 
 """
 We need the request object to get the user, so we'll slightly modify the
@@ -166,3 +168,50 @@ def get_project_list(*args, **kwargs):
 
     projects.sort(key=lambda project: project.name.lower())
     return projects
+
+
+#Helper functions for adapting horizon to multi-region deployment
+#with centralized keystone
+def update_catalog(auth_ref, region_name):
+    """
+    Cleans the service catalog by removing all region entries not 
+    relating to the specified region 
+    """
+    new_service_catalog=[]
+    try:
+        for service in auth_ref.service_catalog.catalog['serviceCatalog']: 
+            new_service ={}
+            for endpoint in service['endpoints']:
+                if endpoint['region']  == region_name:
+                     new_service['type'] = service['type'] 
+                     new_service['name'] = service['name'] 
+                     new_service['endpoints_links'] = service['endpoints_links'] 
+                     new_service['endpoints'] = [endpoint]
+            if len(new_service) >0: new_service_catalog.append(new_service)        
+    except Exception as e: traceback.print_exc()
+
+    LOG.debug("Printing old catalog %s", auth_ref.service_catalog.catalog)
+    auth_ref.service_catalog.catalog['serviceCatalog']=new_service_catalog
+    LOG.debug("Printing new catalog %s", auth_ref.service_catalog.catalog)
+
+def update_catalog2(auth_ref, region_name):
+    """
+    Cleans the service catalog by removing all region entries not 
+    relating to the specified region 
+    """
+    LOG.debug("Printing old catalog %s", auth_ref.service_catalog.catalog)
+    for service in auth_ref.service_catalog.catalog['serviceCatalog']: 
+        for endpoint in service['endpoints']:
+            if endpoint['region']  == region_name:
+                service['endpoints']=[endpoint]
+    LOG.debug("Printing new catalog %s", auth_ref.service_catalog.catalog)
+
+def get_region(request, default_region=None):
+    """
+    Extract the requested region from request object
+    """
+    region_pair = filter(lambda pair: "region" in pair, request.read().split('&'))
+    requested_region = region_pair[0].split("=")[1] if len(region_pair) > 0 else default_region
+    return requested_region
+
+

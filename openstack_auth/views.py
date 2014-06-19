@@ -37,6 +37,9 @@ from .forms import Login
 from .user import set_session_from_user, create_user_from_token, Token
 from .utils import get_keystone_client
 from .utils import get_keystone_version
+from .utils import update_catalog 
+from .utils import get_region 
+from traceback import print_stack
 
 LOG = logging.getLogger(__name__)
 
@@ -59,9 +62,7 @@ def login(request):
     initial = {}
     current_region = request.session.get('region_endpoint', None)
     default_region = getattr(settings, "DEFAULT_REGION")
-    region_pair = filter(lambda pair: "region" in pair, request.read().split('&'))
-    requested_region = region_pair[0].split("=")[1] if len(region_pair) > 0 else default_region
-    #requested_region = request.GET.get('region', None)
+    requested_region=get_region(request, default_region=default_region)
     regions = dict(getattr(settings, "AVAILABLE_REGIONS", []))
     
     LOG.debug("requested_region is %s", requested_region)
@@ -148,17 +149,22 @@ def switch(request, tenant_id, redirect_field_name=REDIRECT_FIELD_NAME):
     insecure = getattr(settings, 'OPENSTACK_SSL_NO_VERIFY', False)
     ca_cert = getattr(settings, "OPENSTACK_SSL_CACERT", None)
     endpoint = request.user.endpoint
+    #old_endpoint =request.session["region_name"] 
     try:
         if get_keystone_version() >= 3:
             if 'v3' not in endpoint:
                 endpoint = endpoint.replace('v2.0', 'v3')
+
         client = get_keystone_client().Client(tenant_id=tenant_id,
                                               token=request.user.token.id,
-                                              auth_url=endpoint,
+                                              auth_url=settings.OPENSTACK_KEYSTONE_URL,
+                                              #auth_url=endpoint,
                                               insecure=insecure,
                                               cacert=ca_cert,
                                               debug=settings.DEBUG)
         auth_ref = client.auth_ref
+        update_catalog(auth_ref, request.session["region_name"]) 
+
         msg = 'Project switch successful for user "%(username)s".' % \
             {'username': request.user.username}
         LOG.info(msg)
@@ -192,6 +198,8 @@ def switch_region(request, region_name,
     Switches the non-identity services region that is being managed
     for the scoped project.
     """
+    print_stack()
+    LOG.debug("region_name is %s, redirect_field_name is %s", region_name, redirect_field_name)
     if region_name in request.user.available_services_regions:
         request.session['services_region'] = region_name
         LOG.debug('Switching services region to %s for user "%s".'

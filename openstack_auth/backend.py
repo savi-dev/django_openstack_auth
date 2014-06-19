@@ -26,7 +26,7 @@ from .user import Token
 from .utils import check_token_expiration
 from .utils import get_keystone_client
 from .utils import get_keystone_version
-
+from .utils import update_catalog 
 LOG = logging.getLogger(__name__)
 
 
@@ -158,22 +158,7 @@ class KeystoneBackend(object):
         # If we made it here we succeeded. Create our User!
         region_name=request.session['region_name']
         LOG.debug("Region name is %s", region_name)
-        new_service_catalog=[]
-        try:
-            for service in auth_ref.service_catalog.catalog['serviceCatalog']: 
-                new_service ={}
-                for endpoint in service['endpoints']:
-                    if endpoint['region']  == region_name:
-                         new_service['type'] = service['type'] 
-                         new_service['name'] = service['name'] 
-                         new_service['endpoints_links'] = service['endpoints_links'] 
-                         new_service['endpoints'] = [endpoint]
-                if len(new_service) >0: new_service_catalog.append(new_service)        
-        except Exception as e: traceback.print_exc()
-
-        #LOG.debug("Printing old catalog %s", auth_ref.service_catalog.catalog)
-        auth_ref.service_catalog.catalog['serviceCatalog']=new_service_catalog
-        #LOG.debug("Printing new catalog %s", auth_ref.service_catalog.catalog)
+        update_catalog(auth_ref, region_name)
         
         user = create_user_from_token(
             request,
