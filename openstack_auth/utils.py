@@ -182,7 +182,7 @@ def update_catalog(auth_ref, region_name):
         for service in auth_ref.service_catalog.catalog['serviceCatalog']: 
             new_service ={}
             for endpoint in service['endpoints']:
-                if endpoint['region']  == region_name:
+                if endpoint['region']  == region_name and service['type'] != 'volume' and service['type'] != 'volumev2':
                      new_service['type'] = service['type'] 
                      new_service['name'] = service['name'] 
                      new_service['endpoints_links'] = service['endpoints_links'] 
