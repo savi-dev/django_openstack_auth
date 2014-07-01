@@ -142,14 +142,20 @@ def delete_token(endpoint, token_id):
 
 
 @login_required
-def switch(request, tenant_id, redirect_field_name=REDIRECT_FIELD_NAME):
-    """ Switches an authenticated user from one project to another. """
-    LOG.debug('Switching to tenant %s for user "%s".'
-              % (tenant_id, request.user.username))
+def switch(request, tenant_id, redirect_field_name=REDIRECT_FIELD_NAME, region_name=None):
+    """ Switches an authenticated user from one project or region to another. """
+    switch_region = region_name != None
+    switch_attr = "Region" if switch_region else "Project"
+    if switch_region:
+        LOG.debug('Switching to region %s for user "%s".'
+                  % (region_name, request.user.username))
+    else:
+        LOG.debug('Switching to tenant %s for user "%s".'
+                  % (tenant_id, request.user.username))
     insecure = getattr(settings, 'OPENSTACK_SSL_NO_VERIFY', False)
     ca_cert = getattr(settings, "OPENSTACK_SSL_CACERT", None)
     endpoint = request.user.endpoint
-    #old_endpoint =request.session["region_name"] 
+    
     try:
         if get_keystone_version() >= 3:
             if 'v3' not in endpoint:
@@ -158,28 +164,35 @@ def switch(request, tenant_id, redirect_field_name=REDIRECT_FIELD_NAME):
         client = get_keystone_client().Client(tenant_id=tenant_id,
                                               token=request.user.token.id,
                                               auth_url=settings.OPENSTACK_KEYSTONE_URL,
-                                              #auth_url=endpoint,
                                               insecure=insecure,
                                               cacert=ca_cert,
                                               debug=settings.DEBUG)
         auth_ref = client.auth_ref
+        
+        if switch_region:
+            request.session['region_name'] = region_name
+        else:
+            request.session['tenant_id'] = tenant_id
+        
+        msg = '%(switch_attr)s switch successful for user "%(username)s".' % \
+            {'switch_attr': switch_attr, 'username': request.user.username}
         update_catalog(auth_ref, request.session["region_name"]) 
-
-        msg = 'Project switch successful for user "%(username)s".' % \
-            {'username': request.user.username}
         LOG.info(msg)
     except keystone_exceptions.ClientException:
-        msg = 'Project switch failed for user "%(username)s".' % \
-            {'username': request.user.username}
+        msg = '%(switch_attr)s switch failed for user "%(username)s".' % \
+            {'switch_attr': switch_attr, 'username': request.user.username}
         LOG.warning(msg)
         auth_ref = None
         LOG.exception('An error occurred while switching sessions.')
-
+    
     # Ensure the user-originating redirection url is safe.
     # Taken from django.contrib.auth.views.login()
     redirect_to = request.REQUEST.get(redirect_field_name, '')
     if not is_safe_url(url=redirect_to, host=request.get_host()):
         redirect_to = settings.LOGIN_REDIRECT_URL
+
+    #Fix for admin redirect issue
+    redirect_to = "/project/"
 
     if auth_ref:
         old_endpoint = request.session.get('region_endpoint')
@@ -198,15 +211,16 @@ def switch_region(request, region_name,
     Switches the non-identity services region that is being managed
     for the scoped project.
     """
-    print_stack()
-    LOG.debug("region_name is %s, redirect_field_name is %s", region_name, redirect_field_name)
-    if region_name in request.user.available_services_regions:
-        request.session['services_region'] = region_name
+    tenant_id=request.session['tenant_id'] 
+    available_regions = map(lambda pair: pair[0], getattr(settings, 'AVAILABLE_REGIONS'))
+    if region_name in available_regions:
         LOG.debug('Switching services region to %s for user "%s".'
-                  % (region_name, request.user.username))
-
+            % (region_name, request.user.username))
+        request.session['services_region'] = region_name
+        return switch(request, 
+                  tenant_id, 
+                  redirect_field_name=REDIRECT_FIELD_NAME, 
+                  region_name=region_name)
+    
     redirect_to = request.REQUEST.get(redirect_field_name, '')
-    if not is_safe_url(url=redirect_to, host=request.get_host()):
-        redirect_to = settings.LOGIN_REDIRECT_URL
-
     return shortcuts.redirect(redirect_to)

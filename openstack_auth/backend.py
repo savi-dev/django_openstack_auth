@@ -143,6 +143,7 @@ class KeystoneBackend(object):
                         cacert=ca_cert,
                         debug=settings.DEBUG)
                     auth_ref = client.auth_ref
+                    request.session['tenant_id'] = project.id
                     break
                 except (keystone_exceptions.ClientException,
                         keystone_exceptions.AuthorizationFailure):
