@@ -172,7 +172,7 @@ def get_project_list(*args, **kwargs):
 
 #Helper functions for adapting horizon to multi-region deployment
 #with centralized keystone
-def update_catalog(auth_ref, region_name):
+def update_catalog2(auth_ref, region_name):
     """
     Cleans the service catalog by removing all region entries not 
     relating to the specified region 
@@ -194,17 +194,22 @@ def update_catalog(auth_ref, region_name):
     auth_ref.service_catalog.catalog['serviceCatalog']=new_service_catalog
     LOG.debug("Printing new catalog %s", auth_ref.service_catalog.catalog)
 
-def update_catalog2(auth_ref, region_name):
+def update_catalog(auth_ref, region_name):
     """
     Cleans the service catalog by removing all region entries not 
     relating to the specified region 
     """
-    LOG.debug("Printing old catalog %s", auth_ref.service_catalog.catalog)
+    not_cinder = lambda service: 'volume' != service['type'] != 'volumev2'
+    new_service_catalog=[]
     for service in auth_ref.service_catalog.catalog['serviceCatalog']: 
         for endpoint in service['endpoints']:
-            if endpoint['region']  == region_name:
-                service['endpoints']=[endpoint]
-    LOG.debug("Printing new catalog %s", auth_ref.service_catalog.catalog)
+            if endpoint['region']  == region_name and not_cinder(service):
+                new_service = service
+                new_service['endpoints']=[endpoint]
+                new_service_catalog.append(new_service) 
+    #LOG.debug("Printing old catalog %s", auth_ref.service_catalog.catalog)
+    auth_ref.service_catalog.catalog['serviceCatalog']=new_service_catalog
+    #LOG.debug("Printing new catalog %s", auth_ref.service_catalog.catalog)
 
 def get_region(request, default_region=None):
     """
